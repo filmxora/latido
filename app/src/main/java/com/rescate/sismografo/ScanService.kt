@@ -100,6 +100,7 @@ class ScanService : Service(), SensorEventListener {
     private val logLock = Any()
 
     private var sensorThread: HandlerThread? = null
+    private var sensorHandler: Handler? = null
     private var activeSensor: Sensor? = null
     private var uiJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -159,9 +160,9 @@ class ScanService : Service(), SensorEventListener {
 
         val thread = HandlerThread("sensor-sampler").also { it.start() }
         sensorThread = thread
-        sensorManager.registerListener(
-            this, sensor, SensorManager.SENSOR_DELAY_FASTEST, Handler(thread.looper)
-        )
+        val handler = Handler(thread.looper)
+        sensorHandler = handler
+        sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST, handler)
 
         ScanController.state.value = ScanController.state.value.copy(
             listening = true, logs = emptyList(), alarmActive = false
@@ -178,7 +179,7 @@ class ScanService : Service(), SensorEventListener {
     private fun stopScanning() {
         uiJob?.cancel(); uiJob = null
         if (activeSensor != null) sensorManager.unregisterListener(this)
-        sensorThread?.quitSafely(); sensorThread = null
+        sensorThread?.quitSafely(); sensorThread = null; sensorHandler = null
         stopAlarmSound()
         releaseWakeLock()
         ScanController.state.value = ScanController.state.value.copy(
@@ -247,15 +248,18 @@ class ScanService : Service(), SensorEventListener {
         }
         updateNotification(
             if (rhythm.grouped) "⚠ SEÑAL DE VIDA — golpes en grupos (auxilio)"
-            else "⚠ SEÑAL DE VIDA — patrón rítmico"
+            else "⚠ SEÑAL DE VIDA — patrón rítmico",
+            alarm = true
         )
     }
 
     private fun dismissAlarm() {
         stopAlarmSound()
         alarmSilencedUntil = System.currentTimeMillis() + ALARM_REARM_MS
-        processor.detectionPaused = false
-        processor.reset()  // ventana limpia: descarta los golpes ya analizados
+        // El reinicio del procesador toca campos no sincronizados; ejecútalo en el MISMO
+        // hilo del sensor para no competir con process(). Si no hay hilo, hazlo directo.
+        val reset = Runnable { processor.detectionPaused = false; processor.reset() }
+        sensorHandler?.post(reset) ?: reset.run()
         ScanController.state.update {
             it.copy(
                 alarmActive = false, confidence = 0f, pattern = "—",
@@ -308,23 +312,32 @@ class ScanService : Service(), SensorEventListener {
     // --- Alarma sonora (en bucle, canal de alarma para sonar incluso en silencio) ---
 
     private fun startAlarmSound() {
-        if (mediaPlayer?.isPlaying == true) return
+        if (mediaPlayer != null) return  // ya sonando o preparándose
         val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             ?: return
         try {
-            mediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
-                setDataSource(this@ScanService, uri)
-                isLooping = true
-                setOnPreparedListener { it.start() }
-                prepareAsync()
+            val mp = MediaPlayer()
+            mp.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            mp.setDataSource(this, uri)
+            mp.isLooping = true
+            mp.setOnPreparedListener { player ->
+                // Solo arranca si NO se liberó mientras preparaba (evita crash al silenciar rápido).
+                if (mediaPlayer === player) {
+                    try { player.start() } catch (_: IllegalStateException) {}
+                }
             }
+            mp.setOnErrorListener { player, _, _ ->
+                if (mediaPlayer === player) { player.release(); mediaPlayer = null }
+                true
+            }
+            mediaPlayer = mp
+            mp.prepareAsync()
         } catch (_: Exception) {
             mediaPlayer?.release(); mediaPlayer = null
         }
@@ -371,7 +384,7 @@ class ScanService : Service(), SensorEventListener {
 
     // --- Notificación de primer plano ---
 
-    private fun buildNotification(text: String): Notification {
+    private fun buildNotification(text: String, alarm: Boolean = false): Notification {
         ensureChannel()
         val launch = packageManager.getLaunchIntentForPackage(packageName)
         val pi = PendingIntent.getActivity(
@@ -383,18 +396,28 @@ class ScanService : Service(), SensorEventListener {
         } else {
             @Suppress("DEPRECATION") Notification.Builder(this)
         }
-        return builder
+        builder
             .setContentTitle("Latido — escaneo activo")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setOngoing(true)
             .setContentIntent(pi)
-            .build()
+        if (alarm) {
+            // Permite silenciar la alarma desde la notificación (app en 2º plano / pantalla apagada).
+            val silencePi = PendingIntent.getService(
+                this, 1,
+                Intent(this, ScanService::class.java).setAction(ACTION_DISMISS_ALARM),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            @Suppress("DEPRECATION")
+            builder.addAction(android.R.drawable.ic_lock_silent_mode, "SILENCIAR", silencePi)
+        }
+        return builder.build()
     }
 
-    private fun updateNotification(text: String) {
+    private fun updateNotification(text: String, alarm: Boolean = false) {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIF_ID, buildNotification(text))
+        nm.notify(NOTIF_ID, buildNotification(text, alarm))
     }
 
     private fun ensureChannel() {

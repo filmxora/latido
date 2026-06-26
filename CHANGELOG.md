@@ -10,6 +10,21 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 ### Por hacer
 - Marca de tiempo y geolocalización opcional en el CSV exportado.
 
+## [1.4.1] - 2026-06-25
+
+### Corregido (auditoría de código)
+- **Posible cierre inesperado de la alarma**: si se silenciaba justo antes de que el reproductor
+  terminara de prepararse, el callback arrancaba un `MediaPlayer` ya liberado
+  (`IllegalStateException`). Ahora se comprueba que siga vigente y se captura el estado; se añade
+  además manejo de error del reproductor.
+- **Carrera de hilos al silenciar**: `processor.reset()` se llamaba desde el hilo principal mientras
+  el hilo del sensor leía/escribía los mismos campos. Ahora el reinicio se ejecuta en el propio hilo
+  del sensor (sin condición de carrera).
+
+### Añadido
+- **Botón SILENCIAR en la notificación**: permite callar la alarma con la app en segundo plano o la
+  pantalla apagada, sin tener que abrir la app.
+
 ## [1.4.0] - 2026-06-25
 
 ### Corregido (fiabilidad de la alerta)
@@ -84,7 +99,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 - Vibración de alerta y pantalla siempre encendida durante el escaneo.
 - Icono adaptativo y nombre de la app: **Latido**.
 
-[Sin publicar]: https://github.com/filmxora/latido/compare/v1.4.0...HEAD
+[Sin publicar]: https://github.com/filmxora/latido/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/filmxora/latido/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/filmxora/latido/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/filmxora/latido/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/filmxora/latido/compare/v1.1.0...v1.2.0
