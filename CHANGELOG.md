@@ -10,6 +10,24 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 ### Por hacer
 - Marca de tiempo y geolocalización opcional en el CSV exportado.
 
+## [1.4.0] - 2026-06-25
+
+### Corregido (fiabilidad de la alerta)
+- **Confianza 0 % en la alerta**: había dos cálculos de ritmo en hilos distintos; el del
+  diálogo recalculaba sobre una ventana que se vaciaba y caía a 0. Ahora la confianza, el
+  patrón y el periodo del momento de la detección quedan **congelados** mientras la alarma
+  está activa. La escritura del estado pasa a ser **atómica** (se elimina la carrera entre
+  el hilo del sensor y el de UI).
+
+### Añadido (precisión)
+- **Umbral de confianza para disparar**: la alarma solo se activa con **confianza ≥ 40 %**.
+- **Confianza recalibrada**: prioriza la regularidad (intencionalidad humana) más un bono
+  por número de golpes; un golpeteo limpio llega al 100 %, el ruido se queda cerca de 0.
+- **Persistencia del patrón**: se exigen **4 golpes rítmicos consecutivos** para confirmar,
+  de modo que una coincidencia aleatoria del ruido no dispara la alerta.
+- **Pruebas unitarias** del motor de detección (señales sintéticas): un golpeteo regular se
+  detecta con confianza alta; ruido aleatorio agresivo y vibración continua → 0 falsos.
+
 ## [1.3.0] - 2026-06-25
 
 ### Corregido (precisión de detección)
@@ -66,7 +84,8 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 - Vibración de alerta y pantalla siempre encendida durante el escaneo.
 - Icono adaptativo y nombre de la app: **Latido**.
 
-[Sin publicar]: https://github.com/filmxora/latido/compare/v1.3.0...HEAD
+[Sin publicar]: https://github.com/filmxora/latido/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/filmxora/latido/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/filmxora/latido/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/filmxora/latido/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/filmxora/latido/compare/v1.0.0...v1.1.0

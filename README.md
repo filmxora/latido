@@ -26,7 +26,15 @@ al ruido ambiental y confirma **patrones rítmicos** (golpes de auxilio) frente 
 5. **Análisis de ritmo humano**: mide la regularidad de los últimos impactos (coeficiente
    de variación) y exige un periodo plausible (≈0.25–2.5 s; descarta ritmos demasiado
    rápidos de máquina/eco). También reconoce el **patrón en grupos** ("golpe-golpe-golpe,
-   pausa…"). Si se confirma → **ventana emergente + alarma sonora en bucle + vibración**.
+   pausa…").
+6. **Confianza y persistencia**: la confianza prioriza la regularidad; la alerta solo se
+   dispara con **confianza ≥ 40 %** y tras **4 golpes rítmicos consecutivos** (el patrón
+   debe sostenerse, así una coincidencia aleatoria del ruido no alarma). Al confirmarse →
+   **ventana emergente + alarma sonora en bucle + vibración**.
+
+El motor de detección tiene **pruebas unitarias** (`app/src/test`) con señales sintéticas:
+un golpeteo regular se detecta con confianza alta, mientras que el ruido aleatorio y la
+vibración continua no generan falsas alertas. Ejecuta `./gradlew testDebugUnitTest`.
 
 ## Funciones
 - **Escaneo en segundo plano**: servicio en primer plano con WakeLock; sigue detectando

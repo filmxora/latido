@@ -35,6 +35,11 @@ class SignalProcessor {
         private const val MAX_HUMAN_PERIOD_MS = 2500f
         /** Histéresis: para rearmar el detector la señal debe caer a esta fracción del umbral. */
         private const val RELEASE_FRACTION = 0.5f
+        /** Confianza mínima para declarar señal de vida (y disparar la alarma). */
+        const val TRIGGER_CONFIDENCE = 0.40f
+        /** Golpes rítmicos CONSECUTIVOS necesarios para confirmar (el patrón debe persistir;
+         *  una coincidencia aleatoria de una sola ventana no basta). */
+        private const val REQUIRED_CONFIRMS = 4
 
         private const val SETTLE_MS = 400L             // ignorar el manipuleo inicial
         private const val CALIBRATION_MS = 1800L       // medir el ruido ambiental real
@@ -77,7 +82,8 @@ class SignalProcessor {
 
     // --- Detección de impactos (por flanco de subida con histéresis) ---
     private val onsets = ArrayDeque<Long>()
-    private var armed = true   // listo para registrar un nuevo golpe
+    private var armed = true            // listo para registrar un nuevo golpe
+    private var consecutiveConfirms = 0 // golpes rítmicos seguidos (persistencia del patrón)
 
     // --- Snapshots para la UI (volátiles, leídos desde el hilo principal) ---
     @Volatile var lastMagnitude = 0f; private set
@@ -94,6 +100,7 @@ class SignalProcessor {
         meanMag = 0f; varMag = 0f
         t0 = 0L; calibN = 0; calibSum = 0.0; calibSumSq = 0.0
         armed = true
+        consecutiveConfirms = 0
         synchronized(onsets) { onsets.clear() }
         lastMagnitude = 0f; noiseFloor = 0f; threshold = 0f
         lastSampleTs = 0L; lastOnsetTs = 0L
@@ -166,7 +173,12 @@ class SignalProcessor {
                     onsets.removeFirst()
                 }
             }
-            return Onset(tMillis, mag)
+            // Evalúa el ritmo en este golpe y exige PERSISTENCIA: el patrón debe
+            // confirmarse en varios golpes seguidos para descartar coincidencias del ruido.
+            val r = analyzeRhythm(tMillis)
+            if (r.rhythmic) consecutiveConfirms++ else consecutiveConfirms = 0
+            val confirmed = consecutiveConfirms >= REQUIRED_CONFIRMS
+            return Onset(tMillis, mag, r, confirmed)
         }
         return null
     }
@@ -217,10 +229,12 @@ class SignalProcessor {
         variance /= intervals.size
         val cv = sqrt(variance) / mean   // coeficiente de variación: bajo = regular
 
-        val regularity = (1f - cv / 0.5f).coerceIn(0f, 1f)
-        val countFactor = ((ts.size - MIN_ONSETS_FOR_RHYTHM + 1).toFloat() / 4f).coerceIn(0f, 1f)
-        var confidence = regularity * countFactor
-        val rhythmic = cv < RHYTHM_CV_MAX
+        // Confianza: la REGULARIDAD es la señal real de intencionalidad humana; el número
+        // de golpes aporta un bono. Un golpeteo deliberado (cv bajo) llega a confianza alta;
+        // el ruido aleatorio (cv alto) se queda cerca de 0.
+        val regularity = (1f - cv / 0.6f).coerceIn(0f, 1f)
+        val countFactor = ((ts.size - MIN_ONSETS_FOR_RHYTHM).toFloat() / 3f).coerceIn(0f, 1f)
+        var confidence = regularity * (0.6f + 0.4f * countFactor)
 
         // --- Detección de patrón en GRUPOS (tipo auxilio: "golpe-golpe-golpe, pausa, ...") ---
         val groups = ArrayList<Int>()
@@ -245,19 +259,28 @@ class SignalProcessor {
             val gapCv = if (gMean > 0f) sqrt(gVar) / gMean else 1f
             val gapsOk = gaps.size == 1 || gapCv < 0.45f
             grouped = sizeOk && gapsOk && avgSize >= 2.0
-            if (grouped) confidence = (confidence + 0.4f).coerceAtMost(1f)
+            if (grouped) confidence = max(confidence, 0.6f)  // grupos = señal fuerte de auxilio
         }
 
+        // Solo se declara "señal de vida" (y se dispara la alarma) con confianza suficiente.
+        val detected = confidence >= TRIGGER_CONFIDENCE
         val pattern = when {
             grouped -> "GRUPOS (auxilio)"
-            rhythmic -> "rítmico"
+            detected -> "rítmico"
+            cv < RHYTHM_CV_MAX -> "rítmico débil"
             else -> "irregular"
         }
-        return RhythmResult(rhythmic || grouped, ts.size, mean, confidence, pattern, grouped, cv)
+        return RhythmResult(detected, ts.size, mean, confidence, pattern, grouped, cv)
     }
 }
 
-data class Onset(val timestampMs: Long, val magnitude: Float)
+data class Onset(
+    val timestampMs: Long,
+    val magnitude: Float,
+    val rhythm: RhythmResult? = null,
+    /** true cuando el patrón rítmico se ha confirmado de forma sostenida (dispara alarma). */
+    val confirmed: Boolean = false
+)
 
 data class RhythmResult(
     val rhythmic: Boolean,

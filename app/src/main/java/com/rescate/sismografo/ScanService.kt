@@ -31,6 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -194,19 +195,20 @@ class ScanService : Service(), SensorEventListener {
         val tMs = event.timestamp / 1_000_000L
         val onset = processor.process(event.values[0], event.values[1], event.values[2], tMs)
         if (onset != null) {
-            val rhythm = processor.analyzeRhythm(tMs)
+            val rhythm = onset.rhythm ?: RhythmResult(false, 0, 0f, 0f)
             Log.d(
                 "LatidoDSP",
-                "ONSET mag=%.2f thr=%.2f ruido=%.2f n=%d periodo=%.0fms cv=%.2f pat=%s conf=%.2f"
+                "ONSET mag=%.2f thr=%.2f ruido=%.2f n=%d periodo=%.0fms cv=%.2f pat=%s conf=%.2f conf?=%b"
                     .format(
                         onset.magnitude, processor.threshold, processor.noiseFloor,
-                        rhythm.onsetCount, rhythm.periodMs, rhythm.cv, rhythm.pattern, rhythm.confidence
+                        rhythm.onsetCount, rhythm.periodMs, rhythm.cv, rhythm.pattern,
+                        rhythm.confidence, onset.confirmed
                     )
             )
             val entry = LogEntry(
                 time = timeFmt.format(Date()),
                 magnitude = onset.magnitude,
-                rhythmic = rhythm.rhythmic,
+                rhythmic = onset.confirmed,
                 pattern = rhythm.pattern,
                 confidence = rhythm.confidence
             )
@@ -214,7 +216,7 @@ class ScanService : Service(), SensorEventListener {
                 pendingLogs.addFirst(entry)
                 while (pendingLogs.size > 200) pendingLogs.removeLast()
             }
-            if (rhythm.rhythmic) onRhythmConfirmed(tMs, rhythm)
+            if (onset.confirmed) onRhythmConfirmed(tMs, rhythm)
         }
     }
 
@@ -230,7 +232,19 @@ class ScanService : Service(), SensorEventListener {
         processor.detectionPaused = true
         vibrateOnce()
         startAlarmSound()
-        ScanController.state.value = ScanController.state.value.copy(alarmActive = true)
+        // Congela la instantánea de la detección (confianza/patrón/periodo) para que el
+        // diálogo muestre el valor REAL del momento, no uno recalculado que decae a 0.
+        ScanController.state.update {
+            it.copy(
+                alarmActive = true,
+                level = DetectionLevel.RHYTHMIC,
+                confidence = rhythm.confidence,
+                pattern = rhythm.pattern,
+                grouped = rhythm.grouped,
+                onsetCount = rhythm.onsetCount,
+                periodMs = rhythm.periodMs
+            )
+        }
         updateNotification(
             if (rhythm.grouped) "⚠ SEÑAL DE VIDA — golpes en grupos (auxilio)"
             else "⚠ SEÑAL DE VIDA — patrón rítmico"
@@ -242,7 +256,12 @@ class ScanService : Service(), SensorEventListener {
         alarmSilencedUntil = System.currentTimeMillis() + ALARM_REARM_MS
         processor.detectionPaused = false
         processor.reset()  // ventana limpia: descarta los golpes ya analizados
-        ScanController.state.value = ScanController.state.value.copy(alarmActive = false)
+        ScanController.state.update {
+            it.copy(
+                alarmActive = false, confidence = 0f, pattern = "—",
+                grouped = false, onsetCount = 0, periodMs = 0f
+            )
+        }
         if (ScanController.state.value.listening) {
             updateNotification("Escuchando… ruido de fondo")
         }
@@ -264,20 +283,26 @@ class ScanService : Service(), SensorEventListener {
             else -> DetectionLevel.NOISE
         }
         val logsCopy = synchronized(logLock) { pendingLogs.toList() }
+        val wave = processor.displaySnapshot()
 
-        ScanController.state.value = ScanController.state.value.copy(
-            waveform = processor.displaySnapshot(),
-            level = level,
-            noiseFloor = processor.noiseFloor,
-            threshold = thr,
-            lastMagnitude = mag,
-            onsetCount = rhythm.onsetCount,
-            periodMs = rhythm.periodMs,
-            confidence = rhythm.confidence,
-            pattern = rhythm.pattern,
-            grouped = rhythm.grouped,
-            logs = logsCopy
-        )
+        // Mientras la alarma está activa, las métricas de la detección quedan CONGELADAS
+        // (las fijó onRhythmConfirmed); aquí solo refrescamos lo visual.
+        ScanController.state.update { cur ->
+            if (cur.alarmActive) {
+                cur.copy(
+                    waveform = wave, noiseFloor = processor.noiseFloor,
+                    threshold = thr, lastMagnitude = mag, logs = logsCopy
+                )
+            } else {
+                cur.copy(
+                    waveform = wave, level = level, noiseFloor = processor.noiseFloor,
+                    threshold = thr, lastMagnitude = mag,
+                    onsetCount = rhythm.onsetCount, periodMs = rhythm.periodMs,
+                    confidence = rhythm.confidence, pattern = rhythm.pattern,
+                    grouped = rhythm.grouped, logs = logsCopy
+                )
+            }
+        }
     }
 
     // --- Alarma sonora (en bucle, canal de alarma para sonar incluso en silencio) ---
