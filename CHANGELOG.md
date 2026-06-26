@@ -8,8 +8,25 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 ## [Sin publicar]
 
 ### Por hacer
-- Servicio en primer plano para escaneo con pantalla apagada.
-- Exportar el registro de detecciones (CSV) para relevo entre rescatistas.
+- Marca de tiempo y geolocalización opcional en el CSV exportado.
+
+## [1.2.0] - 2026-06-25
+
+### Añadido
+- **Servicio en primer plano** con WakeLock parcial: el escaneo continúa con la
+  pantalla apagada o la app en segundo plano, con notificación persistente.
+- **Ventana emergente (diálogo) + alarma sonora en bucle** al confirmar una señal
+  de vida, además de la vibración. La alarma usa el canal de alarma del sistema
+  (suena aunque el teléfono esté en silencio). Botón "SILENCIAR" con rearmado a los 8 s.
+- **Exportar registro a CSV** compartible (correo, WhatsApp, Drive…) vía FileProvider,
+  con hora, magnitud, tipo de patrón y confianza, para el relevo entre rescatistas.
+
+### Cambiado
+- La lógica de sensor/alarma se trasladó del ViewModel a `ScanService`; el ViewModel
+  quedó como fachada delgada sobre el estado compartido.
+- El análisis de ritmo usa ahora el reloj monótono del sensor de forma consistente
+  (se eliminó la mezcla con `System.currentTimeMillis()`).
+- El registro conserva hasta 200 entradas (antes 50) y guarda patrón y confianza.
 
 ## [1.1.0] - 2026-06-25
 
@@ -31,6 +48,7 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 - Vibración de alerta y pantalla siempre encendida durante el escaneo.
 - Icono adaptativo y nombre de la app: **Latido**.
 
-[Sin publicar]: https://github.com/filmxora/latido/compare/v1.1.0...HEAD
+[Sin publicar]: https://github.com/filmxora/latido/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/filmxora/latido/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/filmxora/latido/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/filmxora/latido/releases/tag/v1.0.0

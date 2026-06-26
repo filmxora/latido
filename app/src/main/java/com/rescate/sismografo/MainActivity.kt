@@ -1,9 +1,16 @@
 package com.rescate.sismografo
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,8 +26,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -33,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,7 +62,7 @@ private val Trace = Color(0xFF00FFCC)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Mantener la pantalla encendida durante el escaneo de rescate.
+        // Mantener la pantalla encendida mientras la app está en primer plano.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContent { SeismographScreen() }
     }
@@ -62,8 +72,55 @@ class MainActivity : ComponentActivity() {
 fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     var sensitivity by remember { mutableFloatStateOf(vm.sensitivity) }
-
+    val ctx = LocalContext.current
     val mono = FontFamily.Monospace
+
+    // Permiso de notificaciones (Android 13+) para la notificación de primer plano.
+    val notifPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* el escaneo sigue aunque se deniegue; solo afecta a la notificación visible */ }
+
+    // Ventana emergente + (la alarma sonora la reproduce el servicio).
+    if (state.alarmActive) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissAlarm() },
+            containerColor = Color(0xFF1A0A0A),
+            titleContentColor = Green,
+            textContentColor = Color.White,
+            title = {
+                Text(
+                    "⚠ POSIBLE SEÑAL DE VIDA",
+                    color = Green, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 20.sp
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        if (state.grouped) "Golpes en GRUPOS (patrón de auxilio)"
+                        else "Patrón RÍTMICO detectado",
+                        color = Color.White, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 15.sp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("Confianza: ${(state.confidence * 100).toInt()}%", color = Amber, fontFamily = mono, fontSize = 14.sp)
+                    Text("Impactos: ${state.onsetCount}", color = Gray, fontFamily = mono, fontSize = 13.sp)
+                    Text("Periodo: ${state.periodMs.toInt()} ms", color = Gray, fontFamily = mono, fontSize = 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Mantén el silencio y confirma manualmente antes de actuar.",
+                        color = Gray, fontFamily = mono, fontSize = 11.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { vm.dismissAlarm() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Red)
+                ) {
+                    Text("SILENCIAR", fontFamily = mono, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -74,15 +131,9 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
     ) {
         // --- Cabecera ---
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "LATIDO",
-                color = Red, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 26.sp
-            )
+            Text("LATIDO", color = Red, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 26.sp)
             Spacer(Modifier.height(2.dp))
-            Text(
-                "Detector sísmico de señales de vida",
-                color = Gray, fontFamily = mono, fontSize = 11.sp
-            )
+            Text("Detector sísmico de señales de vida", color = Gray, fontFamily = mono, fontSize = 11.sp)
         }
 
         if (!state.sensorAvailable) {
@@ -98,7 +149,14 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
 
         // --- Botón iniciar / detener ---
         Button(
-            onClick = { vm.toggle() },
+            onClick = {
+                if (!state.listening && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                vm.toggle()
+            },
             modifier = Modifier.fillMaxWidth().height(60.dp),
             shape = RoundedCornerShape(6.dp),
             colors = ButtonDefaults.buttonColors(
@@ -153,14 +211,35 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
             Metric("Confianza", "${(state.confidence * 100).toInt()}%", mono)
         }
 
-        // --- Registro ---
-        Text(
-            "REGISTRO DE PATRONES",
-            color = Amber, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 14.sp
-        )
+        // --- Cabecera del registro + exportar ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "REGISTRO DE PATRONES",
+                color = Amber, fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 14.sp
+            )
+            OutlinedButton(
+                onClick = {
+                    val intent = CsvExporter.buildShareIntent(ctx, state.logs)
+                    if (intent != null) {
+                        ctx.startActivity(Intent.createChooser(intent, "Exportar registro CSV"))
+                    } else {
+                        Toast.makeText(ctx, "No hay detecciones que exportar", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Trace)
+            ) {
+                Text("EXPORTAR CSV", fontFamily = mono, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .background(Panel, RoundedCornerShape(6.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -172,8 +251,11 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
                 ) {
                     Text(log.time, color = Gray, fontFamily = mono, fontSize = 13.sp)
                     Text(
-                        if (log.rhythmic) "♦ RÍTMICO %.2f".format(log.magnitude)
-                        else "%.2f m/s²".format(log.magnitude),
+                        when {
+                            log.grouped() -> "◆ GRUPOS %.2f".format(log.magnitude)
+                            log.rhythmic -> "♦ RÍTMICO %.2f".format(log.magnitude)
+                            else -> "%.2f m/s²".format(log.magnitude)
+                        },
                         color = if (log.rhythmic) Green else Red,
                         fontFamily = mono, fontWeight = FontWeight.Bold, fontSize = 13.sp
                     )
@@ -182,6 +264,8 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
         }
     }
 }
+
+private fun LogEntry.grouped(): Boolean = pattern.startsWith("GRUPOS")
 
 @Composable
 private fun DetectionBanner(state: SeisUiState) {
@@ -218,7 +302,6 @@ private fun Oscilloscope(state: SeisUiState) {
         val data = state.waveform
         if (data.isEmpty()) return@Canvas
 
-        // Escala automática: el mayor entre el umbral y el pico reciente.
         var peak = state.threshold
         for (v in data) if (v > peak) peak = v
         val scaleMax = max(peak * 1.2f, 0.5f)
@@ -226,7 +309,6 @@ private fun Oscilloscope(state: SeisUiState) {
         val h = size.height
         val step = w / (data.size - 1)
 
-        // Línea del umbral
         val thrY = h - (state.threshold / scaleMax * h).coerceIn(0f, h)
         drawLine(
             color = Red.copy(alpha = 0.5f),
@@ -235,7 +317,6 @@ private fun Oscilloscope(state: SeisUiState) {
             strokeWidth = 1.5f
         )
 
-        // Traza de la señal
         var prev = Offset(0f, h - (data[0] / scaleMax * h).coerceIn(0f, h))
         for (i in 1 until data.size) {
             val y = h - (data[i] / scaleMax * h).coerceIn(0f, h)

@@ -58,6 +58,8 @@ class SignalProcessor {
     @Volatile var lastMagnitude = 0f; private set
     @Volatile var noiseFloor = 0f; private set
     @Volatile var threshold = 0f; private set
+    /** Última marca de tiempo monótona vista (mismo reloj que los onsets). */
+    @Volatile var lastSampleTs = 0L; private set
 
     fun reset() {
         synchronized(display) {
@@ -73,6 +75,7 @@ class SignalProcessor {
         lastMagnitude = 0f
         noiseFloor = 0f
         threshold = 0f
+        lastSampleTs = 0L
     }
 
     /**
@@ -96,6 +99,7 @@ class SignalProcessor {
         }
 
         lastMagnitude = mag
+        lastSampleTs = tMillis
         synchronized(display) {
             display[dispIdx] = mag
             dispIdx = (dispIdx + 1) % DISPLAY_POINTS
