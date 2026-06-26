@@ -186,7 +186,9 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
 @Composable
 private fun DetectionBanner(state: SeisUiState) {
     val (text, color) = when (state.level) {
-        DetectionLevel.RHYTHMIC -> "⚠ POSIBLE SEÑAL DE VIDA — patrón rítmico" to Green
+        DetectionLevel.RHYTHMIC ->
+            (if (state.grouped) "⚠ POSIBLE SEÑAL DE VIDA — golpes en grupos (auxilio)"
+            else "⚠ POSIBLE SEÑAL DE VIDA — patrón rítmico") to Green
         DetectionLevel.IMPACT -> "Impacto detectado — esperando ritmo…" to Amber
         DetectionLevel.NOISE -> "Escuchando… ruido de fondo" to Gray
         DetectionLevel.IDLE -> "Apoya el teléfono sobre la estructura y pulsa INICIAR" to Gray

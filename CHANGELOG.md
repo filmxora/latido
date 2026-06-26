@@ -8,9 +8,16 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 ## [Sin publicar]
 
 ### Por hacer
-- Reconocer el patrón SOS específico (3 golpes – pausa – 3 golpes).
 - Servicio en primer plano para escaneo con pantalla apagada.
 - Exportar el registro de detecciones (CSV) para relevo entre rescatistas.
+
+## [1.1.0] - 2026-06-25
+
+### Añadido
+- **Detección de patrón en grupos** (tipo auxilio: "golpe-golpe-golpe, pausa, …"):
+  separa los impactos en ráfagas y confirma tamaños de grupo y pausas consistentes,
+  elevando la confianza y mostrando alerta específica "golpes en grupos (auxilio)".
+- El registro y el banner ahora distinguen patrón rítmico simple vs. patrón en grupos.
 
 ## [1.0.0] - 2026-06-25
 
@@ -24,5 +31,6 @@ y el proyecto usa [Versionado Semántico](https://semver.org/lang/es/).
 - Vibración de alerta y pantalla siempre encendida durante el escaneo.
 - Icono adaptativo y nombre de la app: **Latido**.
 
-[Sin publicar]: https://github.com/filmxora/latido/compare/v1.0.0...HEAD
+[Sin publicar]: https://github.com/filmxora/latido/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/filmxora/latido/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/filmxora/latido/releases/tag/v1.0.0

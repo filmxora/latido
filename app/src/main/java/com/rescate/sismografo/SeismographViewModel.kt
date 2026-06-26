@@ -38,6 +38,8 @@ data class SeisUiState(
     val onsetCount: Int = 0,
     val periodMs: Float = 0f,
     val confidence: Float = 0f,
+    val pattern: String = "—",
+    val grouped: Boolean = false,
     val usingLinearAccel: Boolean = true,
     val sensorAvailable: Boolean = true,
     val logs: List<LogEntry> = emptyList()
@@ -159,6 +161,8 @@ class SeismographViewModel(app: Application) : AndroidViewModel(app), SensorEven
             onsetCount = rhythm.onsetCount,
             periodMs = rhythm.periodMs,
             confidence = rhythm.confidence,
+            pattern = rhythm.pattern,
+            grouped = rhythm.grouped,
             logs = logsCopy
         )
     }

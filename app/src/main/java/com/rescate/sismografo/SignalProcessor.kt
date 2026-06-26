@@ -26,6 +26,7 @@ class SignalProcessor {
         private const val ONSET_WINDOW_MS = 6000L   // ventana de análisis de ritmo
         private const val CALIBRATION_SAMPLES = 120 // ignorar onsets durante el arranque
         private const val MIN_ONSETS_FOR_RHYTHM = 4
+        private const val INTRA_BURST_MAX_MS = 700f // separación máx. dentro de un mismo grupo
     }
 
     /** Multiplicador del umbral (sensibilidad ajustable por el usuario). Mayor = menos sensible. */
@@ -175,12 +176,50 @@ class SignalProcessor {
         variance /= intervals.size
         val cv = sqrt(variance) / mean   // coeficiente de variación: bajo = regular
 
-        // Confianza: regularidad alta + suficientes impactos.
+        // Confianza base: regularidad alta + suficientes impactos.
         val regularity = (1f - (cv / 0.45f)).coerceIn(0f, 1f)
         val countFactor = ((ts.size - MIN_ONSETS_FOR_RHYTHM + 1).toFloat() / 4f).coerceIn(0f, 1f)
-        val confidence = regularity * countFactor
+        var confidence = regularity * countFactor
         val rhythmic = cv < 0.40f && ts.size >= MIN_ONSETS_FOR_RHYTHM
-        return RhythmResult(rhythmic, ts.size, mean, confidence)
+
+        // --- Detección de patrón en GRUPOS (tipo auxilio: "golpe-golpe-golpe, pausa, ...") ---
+        // Separa los golpes en ráfagas: intervalos cortos = dentro de un grupo,
+        // intervalos largos = pausa entre grupos. Es la firma de una señal deliberada.
+        val groups = ArrayList<Int>()
+        val gaps = ArrayList<Float>()
+        var count = 1
+        for (iv in intervals) {
+            if (iv <= INTRA_BURST_MAX_MS) {
+                count++
+            } else {
+                groups.add(count); count = 1; gaps.add(iv)
+            }
+        }
+        groups.add(count)
+
+        var grouped = false
+        if (groups.size >= 2 && groups.all { it >= 2 } && gaps.isNotEmpty()) {
+            // ¿Los grupos tienen tamaño parecido y las pausas son consistentes?
+            val avgSize = groups.average()
+            val sizeOk = groups.all { kotlin.math.abs(it - avgSize) <= 1.0 }
+            var gMean = 0f
+            for (g in gaps) gMean += g
+            gMean /= gaps.size
+            var gVar = 0f
+            for (g in gaps) { val d = g - gMean; gVar += d * d }
+            gVar /= gaps.size
+            val gapCv = if (gMean > 0f) sqrt(gVar) / gMean else 1f
+            val gapsOk = gaps.size == 1 || gapCv < 0.45f
+            grouped = sizeOk && gapsOk && avgSize >= 2.0
+            if (grouped) confidence = (confidence + 0.4f).coerceAtMost(1f)
+        }
+
+        val pattern = when {
+            grouped -> "GRUPOS (auxilio)"
+            rhythmic -> "rítmico"
+            else -> "irregular"
+        }
+        return RhythmResult(rhythmic || grouped, ts.size, mean, confidence, pattern, grouped)
     }
 }
 
@@ -190,5 +229,7 @@ data class RhythmResult(
     val rhythmic: Boolean,
     val onsetCount: Int,
     val periodMs: Float,
-    val confidence: Float
+    val confidence: Float,
+    val pattern: String = "—",
+    val grouped: Boolean = false
 )
