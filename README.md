@@ -13,11 +13,29 @@ al ruido ambiental y confirma **patrones rítmicos** (golpes de auxilio) frente 
 ## Cómo se detecta una señal de vida
 1. **Aceleración lineal**: usa `TYPE_LINEAR_ACCELERATION` (gravedad ya removida por el
    sistema) o, si no existe, estima la gravedad con un filtro paso-bajo y la resta.
-2. **Umbral adaptativo**: `umbral = media_ruido + k·σ`, calculado solo con muestras
-   tranquilas, así los golpes no inflan el propio umbral. `k` es ajustable (slider).
-3. **Detección de impactos** con periodo refractario (evita ecos/rebotes).
-4. **Análisis de ritmo**: mide la regularidad de los últimos impactos (coeficiente de
-   variación de los intervalos). Si es regular → "POSIBLE SEÑAL DE VIDA" + vibración.
+2. **Calibración inicial** (~1.8 s): mide el ruido ambiental real antes de detectar nada
+   —ignorando el manipuleo de los primeros 0.4 s—, para no disparar falsos impactos al
+   arrancar. La UI muestra "Calibrando…".
+3. **Umbral adaptativo con piso físico**: `umbral = media_ruido + k·σ`, calculado solo con
+   muestras tranquilas, pero `σ` nunca se asume por debajo de un mínimo físico (0.15 m/s²),
+   de modo que un teléfono inmóvil no dispara con cualquier roce. `k` es ajustable (slider:
+   derecha = más sensible).
+4. **Detección por flanco de subida con histéresis**: cada golpe genera **un** impacto.
+   Una vibración sostenida (maquinaria, tráfico o la propia alarma del teléfono) se queda
+   alta y **no** se cuenta como golpes repetidos, evitando la realimentación.
+5. **Análisis de ritmo humano**: mide la regularidad de los últimos impactos (coeficiente
+   de variación) y exige un periodo plausible (≈0.25–2.5 s; descarta ritmos demasiado
+   rápidos de máquina/eco). También reconoce el **patrón en grupos** ("golpe-golpe-golpe,
+   pausa…"). Si se confirma → **ventana emergente + alarma sonora en bucle + vibración**.
+
+## Funciones
+- **Escaneo en segundo plano**: servicio en primer plano con WakeLock; sigue detectando
+  con la pantalla apagada, con notificación persistente.
+- **Alerta inequívoca**: al confirmar una señal salta un diálogo y suena una alarma en
+  bucle por el canal de **alarma** del sistema (suena aunque el teléfono esté en silencio).
+  Botón **SILENCIAR** (rearma a los 8 s).
+- **Exportar a CSV**: comparte el registro de detecciones (hora, magnitud, patrón,
+  confianza) por correo/WhatsApp/Drive para el relevo entre rescatistas.
 
 ## Compilar el APK
 
@@ -53,10 +71,13 @@ gradle wrapper --gradle-version 8.10.2
   por encima de 200 Hz en Android 12+. Es un permiso normal, no requiere diálogo.
 
 ## Uso en campo
-1. Activa **modo silencio** y apoya el teléfono **en contacto directo** con la viga o losa.
-2. Pulsa **INICIAR ESCANEO** y mantén el teléfono inmóvil (deja ~2 s de calibración).
-3. Ajusta la sensibilidad si hay mucho ruido (maquinaria): súbela hacia "menos sensible".
-4. La pantalla se mantiene encendida; el teléfono vibra al detectar un patrón rítmico.
+1. Apoya el teléfono **en contacto directo** con la viga o losa.
+2. Pulsa **INICIAR ESCANEO** y mantén el teléfono inmóvil mientras dice "Calibrando…" (~2 s).
+3. Si hay mucho ruido (maquinaria), mueve el slider hacia **"menos sensible"** (izquierda);
+   para señales débiles, hacia **"más sensible"** (derecha).
+4. Al confirmar un patrón salta la **ventana emergente** y suena la **alarma**; pulsa
+   **SILENCIAR** para callarla. El escaneo continúa aunque bloquees la pantalla.
+5. Usa **EXPORTAR CSV** para pasar el registro al siguiente turno de rescate.
 
 ## ⚠️ Aviso importante
 Es una **herramienta de apoyo**, NO sustituye equipo profesional de búsqueda

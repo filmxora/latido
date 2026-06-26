@@ -4,7 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.flow.StateFlow
 
-enum class DetectionLevel { IDLE, NOISE, IMPACT, RHYTHMIC }
+enum class DetectionLevel { IDLE, CALIBRATING, NOISE, IMPACT, RHYTHMIC }
 
 data class LogEntry(
     val time: String,

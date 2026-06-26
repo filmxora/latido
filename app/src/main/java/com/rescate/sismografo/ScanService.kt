@@ -22,6 +22,7 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -105,7 +106,6 @@ class ScanService : Service(), SensorEventListener {
     private var wakeLock: PowerManager.WakeLock? = null
     private var mediaPlayer: MediaPlayer? = null
 
-    private var lastVibrateTs = 0L
     private var alarmSilencedUntil = 0L
 
     override fun onCreate() {
@@ -149,6 +149,7 @@ class ScanService : Service(), SensorEventListener {
         startForeground(NOTIF_ID, buildNotification("Escuchando… apoya el teléfono sobre la estructura"))
 
         processor.sensitivityK = ScanController.sensitivity
+        processor.detectionPaused = false
         processor.reset()
         synchronized(logLock) { pendingLogs.clear() }
         alarmSilencedUntil = 0L
@@ -194,6 +195,14 @@ class ScanService : Service(), SensorEventListener {
         val onset = processor.process(event.values[0], event.values[1], event.values[2], tMs)
         if (onset != null) {
             val rhythm = processor.analyzeRhythm(tMs)
+            Log.d(
+                "LatidoDSP",
+                "ONSET mag=%.2f thr=%.2f ruido=%.2f n=%d periodo=%.0fms cv=%.2f pat=%s conf=%.2f"
+                    .format(
+                        onset.magnitude, processor.threshold, processor.noiseFloor,
+                        rhythm.onsetCount, rhythm.periodMs, rhythm.cv, rhythm.pattern, rhythm.confidence
+                    )
+            )
             val entry = LogEntry(
                 time = timeFmt.format(Date()),
                 magnitude = onset.magnitude,
@@ -212,25 +221,27 @@ class ScanService : Service(), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     private fun onRhythmConfirmed(tMs: Long, rhythm: RhythmResult) {
-        // Vibración breve (siempre que se confirma ritmo).
-        if (tMs - lastVibrateTs >= 1200) {
-            lastVibrateTs = tMs
-            vibrateOnce()
-        }
-        // Alarma + ventana emergente: solo si no fue silenciada hace poco.
-        if (System.currentTimeMillis() >= alarmSilencedUntil) {
-            startAlarmSound()
-            ScanController.state.value = ScanController.state.value.copy(alarmActive = true)
-            updateNotification(
-                if (rhythm.grouped) "⚠ SEÑAL DE VIDA — golpes en grupos (auxilio)"
-                else "⚠ SEÑAL DE VIDA — patrón rítmico"
-            )
-        }
+        // Si la alarma ya está sonando, no re-disparar (sigue en bucle hasta SILENCIAR).
+        if (ScanController.state.value.alarmActive) return
+        if (System.currentTimeMillis() < alarmSilencedUntil) return
+
+        // Pausa la detección para que la vibración/sonido de la propia alarma no se
+        // realimente como nuevos golpes mientras la alerta está activa.
+        processor.detectionPaused = true
+        vibrateOnce()
+        startAlarmSound()
+        ScanController.state.value = ScanController.state.value.copy(alarmActive = true)
+        updateNotification(
+            if (rhythm.grouped) "⚠ SEÑAL DE VIDA — golpes en grupos (auxilio)"
+            else "⚠ SEÑAL DE VIDA — patrón rítmico"
+        )
     }
 
     private fun dismissAlarm() {
         stopAlarmSound()
         alarmSilencedUntil = System.currentTimeMillis() + ALARM_REARM_MS
+        processor.detectionPaused = false
+        processor.reset()  // ventana limpia: descarta los golpes ya analizados
         ScanController.state.value = ScanController.state.value.copy(alarmActive = false)
         if (ScanController.state.value.listening) {
             updateNotification("Escuchando… ruido de fondo")
@@ -242,9 +253,14 @@ class ScanService : Service(), SensorEventListener {
         val mag = processor.lastMagnitude
         val thr = processor.threshold
 
+        // Un impacto se considera "reciente" hasta 1.5 s después del último onset,
+        // en lugar de quedarse pegado mientras haya cualquier onset en la ventana.
+        val recentOnset = processor.lastOnsetTs != 0L &&
+            (processor.lastSampleTs - processor.lastOnsetTs) < 1500
         val level = when {
+            processor.calibrating -> DetectionLevel.CALIBRATING
             rhythm.rhythmic -> DetectionLevel.RHYTHMIC
-            mag > thr && rhythm.onsetCount > 0 -> DetectionLevel.IMPACT
+            recentOnset -> DetectionLevel.IMPACT
             else -> DetectionLevel.NOISE
         }
         val logsCopy = synchronized(logLock) { pendingLogs.toList() }

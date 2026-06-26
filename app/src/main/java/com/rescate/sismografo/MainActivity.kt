@@ -71,7 +71,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
-    var sensitivity by remember { mutableFloatStateOf(vm.sensitivity) }
+    // El slider expresa "sensibilidad" 0..1 (derecha = MÁS sensible). Internamente se
+    // traduce a k (sigmas): nivel 0 → 6σ (menos sensible), nivel 1 → 1.5σ (más sensible).
+    var sensLevel by remember { mutableFloatStateOf(kToLevel(vm.sensitivity)) }
     val ctx = LocalContext.current
     val mono = FontFamily.Monospace
 
@@ -169,22 +171,22 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
             )
         }
 
-        // --- Sensibilidad ---
+        // --- Sensibilidad (derecha = más sensible) ---
         Column {
             Text(
-                "Sensibilidad (umbral = ruido + ${"%.1f".format(sensitivity)}σ)",
+                "Sensibilidad: ${(sensLevel * 100).toInt()}%  (umbral = ruido + ${"%.1f".format(levelToK(sensLevel))}σ)",
                 color = Color(0xFFBBBBBB), fontFamily = mono, fontSize = 12.sp
             )
             Slider(
-                value = sensitivity,
-                onValueChange = { sensitivity = it; vm.setSensitivity(it) },
-                valueRange = 1.5f..6f,
+                value = sensLevel,
+                onValueChange = { sensLevel = it; vm.setSensitivity(levelToK(it)) },
+                valueRange = 0f..1f,
                 colors = SliderDefaults.colors(
                     thumbColor = Red, activeTrackColor = Red, inactiveTrackColor = Color(0xFF333333)
                 )
             )
             Text(
-                "Mín. sensible ←  → Máx. sensible (menos σ = más sensible)",
+                "← menos sensible        más sensible →",
                 color = Gray, fontFamily = mono, fontSize = 10.sp
             )
         }
@@ -267,6 +269,12 @@ fun SeismographScreen(vm: SeismographViewModel = viewModel()) {
 
 private fun LogEntry.grouped(): Boolean = pattern.startsWith("GRUPOS")
 
+// Mapeo slider <-> k (sigmas). nivel 1 = más sensible (k 1.5), nivel 0 = menos sensible (k 6).
+private const val K_MIN = 1.5f
+private const val K_MAX = 6f
+private fun levelToK(level: Float): Float = K_MAX - level * (K_MAX - K_MIN)
+private fun kToLevel(k: Float): Float = ((K_MAX - k) / (K_MAX - K_MIN)).coerceIn(0f, 1f)
+
 @Composable
 private fun DetectionBanner(state: SeisUiState) {
     val (text, color) = when (state.level) {
@@ -274,6 +282,7 @@ private fun DetectionBanner(state: SeisUiState) {
             (if (state.grouped) "⚠ POSIBLE SEÑAL DE VIDA — golpes en grupos (auxilio)"
             else "⚠ POSIBLE SEÑAL DE VIDA — patrón rítmico") to Green
         DetectionLevel.IMPACT -> "Impacto detectado — esperando ritmo…" to Amber
+        DetectionLevel.CALIBRATING -> "Calibrando ruido ambiental… mantén el silencio" to Trace
         DetectionLevel.NOISE -> "Escuchando… ruido de fondo" to Gray
         DetectionLevel.IDLE -> "Apoya el teléfono sobre la estructura y pulsa INICIAR" to Gray
     }
