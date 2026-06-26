@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Latido — Detector sísmico de señales de vida</title>
+<meta name="description" content="App Android que convierte el teléfono en un detector sísmico de contacto para rescate: detecta golpes de auxilio en estructuras colapsadas usando el acelerómetro.">
+<meta property="og:title" content="Latido — Detector sísmico de señales de vida">
+<meta property="og:description" content="Detecta golpes de auxilio en estructuras colapsadas usando el acelerómetro del teléfono.">
+<style>
+  :root{
+    --bg:#0A0A0A; --panel:#161616; --line:#262626;
+    --red:#FF3B30; --green:#28A745; --amber:#FF9F0A; --trace:#00FFCC;
+    --gray:#888; --text:#EDEDED;
+    --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:var(--mono);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 20px 60px}
+  header{text-align:center;padding:24px 0 8px}
+  .logo{color:var(--red);font-size:40px;font-weight:800;letter-spacing:4px;margin:0}
+  .tag{color:var(--gray);font-size:13px;margin-top:4px}
+  .badge{display:inline-block;margin-top:14px;font-size:12px;color:var(--green);
+    border:1px solid var(--green);border-radius:20px;padding:3px 12px}
+  .lead{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:18px 20px;margin:26px 0;font-size:15px}
+  .lead b{color:#fff}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:26px 0}
+  .btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+    font-family:var(--mono);font-weight:700;font-size:15px;padding:14px 22px;border-radius:8px}
+  .btn-dl{background:var(--green);color:#fff}
+  .btn-dl:hover{filter:brightness(1.1)}
+  .btn-gh{background:#1f1f1f;color:#fff;border:1px solid var(--line)}
+  .btn-gh:hover{border-color:var(--gray)}
+  .btn .sz{font-weight:400;font-size:12px;opacity:.8}
+  .hero{display:flex;gap:30px;align-items:center;flex-wrap:wrap;justify-content:center;margin:10px 0 36px}
+  .shot{width:240px;border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  .hero .side{flex:1;min-width:240px}
+  h2{font-size:18px;color:var(--amber);margin:38px 0 14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{color:var(--trace);font-weight:700;font-size:14px;display:block;margin-bottom:4px}
+  .card .v{color:#cfcfcf;font-size:13px}
+  .compat{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .compat .ok{border-left:3px solid var(--green)}
+  .compat .no{border-left:3px solid var(--red)}
+  .compat h3{margin:0 0 8px;font-size:14px}
+  .compat .ok h3{color:var(--green)} .compat .no h3{color:var(--red)}
+  .compat ul{margin:0;padding-left:18px;font-size:13px;color:#cfcfcf}
+  .compat li{margin:4px 0}
+  .note{background:rgba(255,159,10,.08);border:1px solid var(--amber);border-radius:10px;
+    padding:14px 18px;font-size:13px;color:#e8d9b0;margin-top:18px}
+  .repo{display:flex;gap:16px;align-items:center;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:16px;text-decoration:none;color:inherit;margin-top:14px}
+  .repo:hover{border-color:var(--gray)}
+  .repo img{width:300px;max-width:45%;border-radius:8px;border:1px solid var(--line)}
+  .repo .t{color:#fff;font-weight:700} .repo .u{color:var(--trace);font-size:13px;word-break:break-all}
+  .repo .d{color:var(--gray);font-size:13px;margin-top:6px}
+  footer{text-align:center;color:var(--gray);font-size:12px;margin-top:46px}
+  @media(max-width:540px){.compat{grid-template-columns:1fr}.repo{flex-direction:column;text-align:center}.repo img{max-width:100%;width:100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1 class="logo">LATIDO</h1>
+    <div class="tag">Detector sísmico de señales de vida · Android</div>
+    <div class="badge">Gratis · Código abierto · Android 8.0+</div>
+  </header>
+
+  <div class="lead">
+    <b>Latido</b> convierte un teléfono Android en un <b>detector sísmico de contacto</b> para
+    rescate. Apoyas el teléfono sobre la estructura colapsada (una losa, viga o tubo) y la app
+    escucha con el acelerómetro los <b>golpes de auxilio</b> de una persona atrapada,
+    distinguiendo un <b>golpeteo rítmico humano</b> del ruido de fondo y avisando con una alarma.
+  </div>
+
+  <div class="cta">
+    <a class="btn btn-dl" href="latido-1.4.0.apk" download>⬇ Descargar APK <span class="sz">v1.4 · 6.5 MB</span></a>
+    <a class="btn btn-gh" href="https://github.com/filmxora/latido" target="_blank" rel="noopener">⌥ Ver en GitHub</a>
+  </div>
+
+  <div class="hero">
+    <img class="shot" src="screenshot.png" alt="Pantalla de Latido escaneando">
+    <div class="side">
+      <p>La pantalla muestra en tiempo real:</p>
+      <div class="card"><span class="k">Osciloscopio</span><span class="v">la vibración captada y la línea de umbral.</span></div>
+      <div class="card" style="margin-top:10px"><span class="k">Métricas</span><span class="v">magnitud, umbral, nº de impactos y <b>confianza</b> de la detección.</span></div>
+      <div class="card" style="margin-top:10px"><span class="k">Banner + alarma</span><span class="v">cuando confirma un patrón: ventana emergente y alarma sonora.</span></div>
+    </div>
+  </div>
+
+  <h2>Qué hace y qué parte del teléfono usa</h2>
+  <div class="grid">
+    <div class="card"><span class="k">Acelerómetro (alta frecuencia)</span><span class="v">Es el "oído" de la app: mide microvibraciones transmitidas por la estructura. Usa aceleración lineal (sin gravedad) hasta &gt;200 Hz.</span></div>
+    <div class="card"><span class="k">Procesador de señal</span><span class="v">Calibra el ruido ambiental y fija un umbral adaptativo, para no confundir un golpe real con vibración de fondo.</span></div>
+    <div class="card"><span class="k">Detección de ritmo</span><span class="v">Analiza la regularidad de los golpes. Solo alerta con un patrón humano sostenido (confianza ≥ 40 %, 4 golpes seguidos).</span></div>
+    <div class="card"><span class="k">Altavoz + vibrador</span><span class="v">Al confirmar, suena una alarma en bucle por el canal de alarma (suena aun en silencio) y vibra el teléfono.</span></div>
+    <div class="card"><span class="k">Servicio en segundo plano</span><span class="v">Mantiene el escaneo activo con la pantalla apagada usando un WakeLock y una notificación persistente.</span></div>
+    <div class="card"><span class="k">Compartir / CSV</span><span class="v">Exporta el registro de detecciones (hora, magnitud, patrón, confianza) para el relevo entre rescatistas.</span></div>
+  </div>
+
+  <h2>Compatibilidad</h2>
+  <div class="compat">
+    <div class="card ok">
+      <h3>✓ Compatibles</h3>
+      <ul>
+        <li><b>Android 8.0 (Oreo) o superior</b> con acelerómetro — la inmensa mayoría de teléfonos.</li>
+        <li><b>Mejor en Android 12+</b>: permite muestreo por encima de 200 Hz (más precisión).</li>
+        <li>Ideal con sensor de <b>aceleración lineal</b> (la mayoría de gamas media/alta lo tienen).</li>
+      </ul>
+    </div>
+    <div class="card no">
+      <h3>✗ No compatibles / limitaciones</h3>
+      <ul>
+        <li><b>iPhone / iOS</b>: la app es solo Android.</li>
+        <li><b>Android anterior a 8.0</b> o dispositivos <b>sin acelerómetro</b> (muy raros).</li>
+        <li><b>Xiaomi/MIUI, Huawei, Samsung</b> y otros con ahorro de batería agresivo pueden cortar el escaneo en segundo plano: desactiva la optimización de batería para Latido.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>⚠ Aviso.</b> Latido es una <b>herramienta de apoyo</b>, no sustituye al equipo profesional
+    de búsqueda (geófonos / dispositivos sísmico-acústicos). Detecta bien por <b>contacto directo
+    o muy cercano</b>, no a metros de distancia. <b>Nunca</b> debe usarse para descartar que haya
+    una persona: que no detecte no significa que no haya nadie. Valida siempre con los protocolos
+    del cuerpo de rescate.
+  </div>
+
+  <h2>Código fuente</h2>
+  <a class="repo" href="https://github.com/filmxora/latido" target="_blank" rel="noopener">
+    <img src="https://opengraph.githubassets.com/1/filmxora/latido" alt="Repositorio filmxora/latido en GitHub">
+    <div>
+      <div class="t">filmxora/latido</div>
+      <div class="u">github.com/filmxora/latido</div>
+      <div class="d">App nativa Kotlin + Jetpack Compose. Licencia MIT. Incluye el código del motor de detección y sus pruebas.</div>
+    </div>
+  </a>
+
+  <footer>
+    Latido v1.4 · Android nativo (Kotlin + Jetpack Compose) · Licencia MIT<br>
+    Instala desde "orígenes desconocidos" (Ajustes → Seguridad) tras descargar el APK.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -4,6 +4,9 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](#)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?logo=jetpackcompose&logoColor=white)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Web](https://img.shields.io/badge/Sitio-latidoapp.site-00FFCC)](https://latidoapp.site)
+
+> 🌐 **Descarga e información:** [latidoapp.site](https://latidoapp.site) — landing con captura, descarga del APK y explicación. El código de la landing está en [`site/`](site/).
 
 **Latido** es una app Android nativa (Kotlin + Jetpack Compose) que convierte el teléfono
 en un detector sísmico de contacto para rescate en estructuras colapsadas. Lee el acelerómetro a alta
