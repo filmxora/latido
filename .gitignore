@@ -10,3 +10,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Material de firma (keystore + APKs) — NUNCA subir a git
+/firma/
+*.keystore
+*.jks
+*.apk
+.kotlin/
